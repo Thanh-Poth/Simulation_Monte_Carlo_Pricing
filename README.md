@@ -1,4 +1,4 @@
-## 📖 Overview
+## Overview
 
 This program makes multiple simulations of the future price of our stock based on a Monte Carlo simulation
 
