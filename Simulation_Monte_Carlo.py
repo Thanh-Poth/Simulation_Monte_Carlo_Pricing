@@ -1,90 +1,54 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import yfinance as yf
 
-donnee = pd.read_csv("liste_de_données_initiales.csv", encoding = "utf-16")
-print(donnee)
-donnee.drop('0', axis = 1, inplace = True)
-donnee.drop('303', axis = 1, inplace = True)
-donnee.columns = ["Date", "Open", "High", "Low", "Close"]
-donnee['Date'] = pd.to_datetime(donnee['Date'], format="%Y.%m.%d")
-donnee['Annee'] = donnee['Date'].dt.year
+class StockSimulator :
+    def __init__(self, ticker, start_date, end_date):
+        self.ticker = ticker
+        self.data = yf.download(ticker, start = start_date, end = end_date)
+        self.data["Log_return"] = np.log(self.data['Close'] / self.data['Close'].shift(1))
 
-array_max = []
-array_min = []
-current_year = donnee['Annee'][0]
-current_max = donnee['High'][0]
-current_min = donnee['Low'][0]
-# Boucle pour déterminer les max et min de chaque années
-for i in range(1, len(donnee)):
-    if donnee['Annee'][i] == current_year:
-        if donnee['High'][i] > current_max:
-            current_max = donnee['High'][i]
-        if donnee['Low'][i] < current_min:
-            current_min = donnee['Low'][i]     
-    else:
-        array_max.append(current_max)
-        array_min.append(current_min)
-        current_year = donnee['Annee'][i]
-        current_max = donnee['High'][i]
-        current_min = donnee['Low'][i]
-array_max.append(current_max)
-array_min.append(current_min)  
-np_array_max = np.array(array_max)
-np_array_min = np.array(array_min)
-print(np_array_max)
-print(np_array_min)
+    def calculate_params(self) :
+        self.mu = self.data['Log_return'].mean() * 252
+        self.sigma = self.data['Log_return'].std() * np.sqrt(252)
+        self.last_price = self.data['Close'].iloc[-1].item()
 
-array_max2 = []
-array_min2 = []
-current_year2 = donnee['Annee'][0]
-current_max2 = donnee['Open'][0]
-current_min2 = donnee['Close'][0]
-# Boucle pour déterminer les max et min de chaque années
-for i in range(1, len(donnee)):
-    if donnee['Annee'][i] == current_year2:
-        if donnee['Open'][i] > current_max2:
-            current_max2 = donnee['Open'][i]
-        if donnee['Close'][i] < current_min2:
-            current_min2 = donnee['Close'][i]     
-    else:
-        array_max2.append(current_max2)
-        array_min2.append(current_min2)
-        current_year2 = donnee['Annee'][i]
-        current_max2 = donnee['Open'][i]
-        current_min2 = donnee['Close'][i]
-array_max2.append(current_max2)
-array_min2.append(current_min2)  
-np_array_max2 = np.array(array_max2)
-np_array_min2 = np.array(array_min2)
-# Parametres selon la version discrétisée du Mouvement Brownien Géométrique
-initial_price = donnee['Close'].iloc[-1]   # Prix initial de l'actif.
-mu = ((np_array_max2 - np_array_min2)/np_array_min2).mean()    # Rendement annuel attendue
-print(mu)
-sigma = ((np_array_max - np_array_min)/np_array_min).mean()  # Volatilité annuelle attendue
-print(sigma)  
-T = 1    # Temps en année de la simulation
-N = 365   # Nombre de pas par an
-dt = T / N
-nb_simulation = 10000
+        print(f'Paramètres pour {self.ticker}, prix initiale = {self.last_price}, mu = {self.mu}, sigma = {self.sigma}')
 
-# Simulation 
-y_repartition = []
-for i in range (nb_simulation):
-    prices = [initial_price]
-    for j in range(N):
-        # calcul du choc aléatoire
-        choc = np.random.normal(loc = mu * dt, scale = sigma * np.sqrt(dt))
-        prices.append(prices[-1]*np.exp(choc))
-    y_repartition.append(prices[-1])
-    plt.plot(prices)
+    def simulation(self, horizon = 1, simulations = 100):
+        dt = 1 / 252
+        step = int(horizon * 252)
+        self.simulations = simulations
+        random_perturbations = np.random.normal(0, 1, (step, self.simulations))
+        
+        daily_price = np.exp((self.mu - 0.5 * self.sigma**2) * dt + self.sigma * np.sqrt(dt) * random_perturbations)
 
-plt.title("Simulation de Monte Carlo")
-plt.xlabel("Nombre de pas")
-plt.ylabel("Prix de l'actif")
-plt.show()
-plt.hist(y_repartition, bins = 100, rwidth = 0.8)
-plt.title("Répartition des résultats")
-plt.xlabel("Simulation")
-plt.ylabel("Prix de l'actif")
-plt.show()
+        price_points = np.vstack([np.ones((1, self.simulations)), daily_price])
+
+        self.simulated_prices = self.last_price * price_points.cumprod(axis = 0)
+        self.final_price = self.simulated_prices[-1, :]
+
+    def plot_results(self):
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.simulated_prices[:, :], alpha=0.5, linewidth=1)
+
+        plt.title(f"Simulation de Monte Carlo ({self.simulations} tirages)")
+        plt.xlabel("Jours de trading")
+        plt.ylabel("Prix de l'actif")
+        plt.show()
+
+        plt.figure(figsize=(10, 6))
+        plt.hist(self.final_price, bins=100, rwidth=0.8, color='skyblue', edgecolor='black')
+        mean_price = np.mean(self.final_price)
+        plt.axvline(mean_price, color='r', linestyle='dashed', linewidth=1, label=f'Moyenne: {mean_price:.2f}')
+        plt.title("Répartition des prix finaux")
+        plt.xlabel("Prix de l'actif")
+        plt.ylabel("Fréquence")
+        plt.legend()
+        plt.show()
+
+sim = StockSimulator("NVDA", "2020-01-01", "2023-01-01") # Apple, de 2020 à 2023
+sim.calculate_params()
+sim.simulation(horizon=1, simulations=5000) # Prévision sur 1 an
+sim.plot_results()
