@@ -8,11 +8,11 @@ To calculate the price at each step i have used the formula of a Geometric Brown
 $$dS_t = \mu S_t dt + \sigma S_t dW_t$$
 
 with,
-$$S_t$$ the spot price at the t moment
+$$S_t$$ the spot depending of the time t
 $$\mu$$ the mean expected yield
 $$\sigma$$ volatility
 
-## Results 
+## Results s
 
 Here what we obtain with 5 000 simulations :
 
